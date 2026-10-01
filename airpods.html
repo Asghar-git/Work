@@ -4231,19 +4231,6 @@ function filmP(){
 }
 function frame(t){
   requestAnimationFrame(frame);
-
-/* nav Overview: land where chapter 1 is fully on (p=1/2n), not at film
-   start where the card sits mid-fade and looks broken */
-(function(){
-  var ov=document.querySelector('a[href="#film"]');
-  if(!ov||!film||!chaps.length) return;
-  ov.addEventListener('click',function(e){
-    e.preventDefault();
-    var r=film.getBoundingClientRect();
-    var y=r.top+window.scrollY+Math.max(r.height-innerHeight,0)*(0.5/chaps.length);
-    window.scrollTo({top:y,behavior:reduced?'auto':'smooth'});
-  });
-})();
   var p=filmP();
   pSm += (p-pSm)*(reduced?1:0.09);
   var pp=reduced?p:pSm;
