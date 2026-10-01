@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUMEN — 3D & Interactive Studio</title>
+<style>
+  :root{
+    --paper:#f2efe8; --ink:#0d0d0f; --blue:#2743f0; --cyan:#37e6e6;
+    --serif:"Didot","Bodoni MT","Playfair Display",Georgia,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:auto}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);overflow-x:hidden;
+       -webkit-font-smoothing:antialiased}
+  ::selection{background:var(--blue);color:#fff}
+
+  /* ---------- fixed 3D canvas : the continuous flight ---------- */
+  #gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+  /* ---------- loader ritual ---------- */
+  #loader{position:fixed;inset:0;z-index:100;background:#0a0a0d;color:#f2efe8;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;
+    transition:transform .9s cubic-bezier(.76,0,.24,1)}
+  #loader.done{transform:translateY(-100%)}
+  #loader .l-word{font-family:var(--serif);font-size:clamp(40px,7vw,84px);letter-spacing:.14em}
+  #loader .l-bar{width:min(320px,60vw);height:2px;background:#2a2a30;position:relative;overflow:hidden}
+  #loader .l-bar i{position:absolute;inset:0;background:#f2efe8;transform-origin:left;transform:scaleX(0)}
+  #loader .l-pct{font-size:12px;letter-spacing:.35em;color:#8a8a92}
+
+  /* ---------- nav : auto-inverts via difference ---------- */
+  nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;
+    justify-content:space-between;padding:22px clamp(20px,4vw,54px);
+    mix-blend-mode:difference;color:#fff}
+  nav .wordmark{font-weight:800;letter-spacing:.22em;font-size:17px}
+  nav .links{display:flex;align-items:center;gap:26px;font-size:12px;letter-spacing:.28em}
+  nav .pill{border:1px solid #fff;border-radius:999px;padding:10px 22px;letter-spacing:.28em;font-size:12px}
+  nav .links a{color:inherit;text-decoration:none;cursor:pointer}
+  @media(max-width:640px){nav .links .hide-m{display:none}}
+
+  /* ---------- content above the flight ---------- */
+  main{position:relative;z-index:2}
+
+  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+    padding:0 clamp(20px,6vw,90px)}
+  .eyebrow{font-size:12px;letter-spacing:.4em;margin-bottom:28px;opacity:.65}
+  h1.serif{font-family:var(--serif);font-weight:400;line-height:1.02;
+    font-size:clamp(44px,8.4vw,124px);max-width:12ch}
+  h1.serif em{font-style:italic;color:var(--blue)}
+  .hero p.lede{margin-top:30px;max-width:52ch;font-size:clamp(15px,1.6vw,19px);line-height:1.65;opacity:.78}
+  .scroll-cue{margin-top:70px;display:flex;align-items:center;gap:18px;
+    font-size:11px;letter-spacing:.4em;opacity:.6}
+  .scroll-cue .line{width:1px;height:56px;background:currentColor;animation:cue 1.8s ease-in-out infinite}
+  @keyframes cue{0%,100%{transform:scaleY(.4);transform-origin:top;opacity:.4}
+    50%{transform:scaleY(1);opacity:1}}
+
+  .divider{display:flex;align-items:center;justify-content:center;gap:22px;
+    padding:26px 0;font-size:11px;letter-spacing:.45em;opacity:.55}
+  .divider b{font-weight:400}
+
+  /* ---------- the flight : transparent, words ride the camera ---------- */
+  .flight{position:relative;padding:30vh 0 30vh}
+  .slot{height:118vh;position:relative}
+  .beat{position:sticky;top:34vh;margin:0 auto;text-align:center;pointer-events:none;
+    opacity:0;will-change:opacity,transform}
+  .beat .w{font-family:var(--serif);font-size:clamp(52px,11vw,168px);line-height:1;color:#fff;
+    text-shadow:0 4px 60px rgba(0,0,0,.55)}
+  .beat .w em{font-style:italic;color:var(--cyan)}
+  .beat .sub{margin-top:18px;font-size:12px;letter-spacing:.42em;color:#cfd6ff;opacity:.85}
+
+  /* ---------- work strip (DOM breather) ---------- */
+  .work{background:var(--paper);border-radius:34px 34px 0 0;padding:110px clamp(20px,6vw,90px) 90px;
+    position:relative}
+  .work h2{font-size:clamp(38px,6vw,84px);font-weight:800;letter-spacing:-.02em;line-height:1;margin-bottom:14px}
+  .work .k{font-size:11px;letter-spacing:.4em;opacity:.55;margin-bottom:54px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px}
+  .card{border-radius:22px;overflow:hidden;background:#111;color:#f2efe8;min-height:300px;
+    display:flex;flex-direction:column;justify-content:flex-end;padding:26px;position:relative;
+    transform:translateY(36px);opacity:0;transition:transform .8s cubic-bezier(.2,.7,.2,1),opacity .8s}
+  .card.in{transform:none;opacity:1}
+  .card .tags{font-size:10px;letter-spacing:.3em;opacity:.6;margin-bottom:10px}
+  .card h3{font-family:var(--serif);font-size:30px;font-weight:400}
+  .card.c1{background:radial-gradient(120% 120% at 20% 10%,#3b5bff 0%,#101b6e 55%,#070a24 100%)}
+  .card.c2{background:radial-gradient(120% 120% at 80% 20%,#37e6e6 0%,#0e5f6e 55%,#062a30 100%)}
+  .card.c3{background:radial-gradient(120% 120% at 30% 80%,#ff5fa2 0%,#7e1e4e 55%,#2a0a1c 100%)}
+  .card.c4{background:radial-gradient(120% 120% at 70% 70%,#ffd23f 0%,#8a5a00 60%,#241a04 100%)}
+
+  /* ---------- finale ---------- */
+  .finale{background:#070a24;color:#f2efe8;text-align:center;
+    padding:150px clamp(20px,6vw,90px) 120px;position:relative;overflow:hidden}
+  .finale .k{font-size:11px;letter-spacing:.45em;opacity:.6;margin-bottom:30px}
+  .finale h2{font-family:var(--serif);font-weight:400;font-size:clamp(46px,8vw,120px);line-height:1.05}
+  .finale h2 em{font-style:italic;color:var(--cyan)}
+  .btn{display:inline-block;margin-top:44px;background:#f2efe8;color:#0d0d0f;border-radius:999px;
+    padding:18px 46px;font-size:13px;letter-spacing:.3em;text-decoration:none;font-weight:700}
+  footer{margin-top:110px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between;
+    font-size:11px;letter-spacing:.25em;opacity:.55;border-top:1px solid #ffffff22;padding-top:26px}
+  @media(prefers-reduced-motion:reduce){.scroll-cue .line{animation:none}}
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div id="loader" aria-hidden="true">
+  <div class="l-word">LUMEN</div>
+  <div class="l-bar"><i id="lbar"></i></div>
+  <div class="l-pct" id="lpct">00</div>
+</div>
+
+<nav>
+  <div class="wordmark">LUMEN</div>
+  <div class="links">
+    <a class="hide-m" data-to=".work">WORK</a>
+    <a class="hide-m" data-to=".flight">STUDIO</a>
+    <a class="pill" data-to=".finale">LET'S TALK</a>
+  </div>
+</nav>
+
+<main>
+  <section class="hero">
+    <div class="eyebrow">LUMEN — 3D &amp; INTERACTIVE STUDIO</div>
+    <h1 class="serif">We craft 3D worlds you can <em>fall into.</em></h1>
+    <p class="lede">Design, motion and real-time 3D — fused into one continuous journey.
+      This page is a single camera flight. Your scroll is the dolly.</p>
+    <div class="scroll-cue"><span class="line"></span><span>SCROLL TO FLY</span></div>
+  </section>
+
+  <div class="divider"><b>+</b><span>SCROLL TO EXPLORE</span><b>+</b></div>
+
+  <section class="flight" id="flight">
+    <div class="slot"><div class="beat b1"><div class="w">Step <em>into</em></div><div class="sub">THE FLIGHT BEGINS</div></div></div>
+    <div class="slot"><div class="beat b2"><div class="w">the <em>dark</em></div><div class="sub">LEAVE THE PAGE BEHIND</div></div></div>
+    <div class="slot"><div class="beat b3"><div class="w">chase <em>light</em></div><div class="sub">THROUGH THE VORTEX</div></div></div>
+    <div class="slot"><div class="beat b4"><div class="w">go <em>wild</em></div><div class="sub">INTO THE BLUE</div></div></div>
+    <div class="slot"><div class="beat b5"><div class="w"><em>arrive.</em></div><div class="sub">WELCOME TO LUMEN</div></div></div>
+  </section>
+
+  <section class="work">
+    <div class="k">SELECTED WORLDS</div>
+    <h2>Featured<br>Work</h2>
+    <div class="cards">
+      <div class="card c1"><div class="tags">WEB • 3D • MOTION</div><h3>Neon Meridian</h3></div>
+      <div class="card c2"><div class="tags">CONCEPT • WEBGL</div><h3>Glass Ocean</h3></div>
+      <div class="card c3"><div class="tags">BRAND WORLD • 3D</div><h3>Velvet Static</h3></div>
+      <div class="card c4"><div class="tags">CAMPAIGN • MOTION</div><h3>Solar Bloom</h3></div>
+    </div>
+  </section>
+
+  <section class="finale">
+    <div class="k">+ IS YOUR BIG IDEA READY +</div>
+    <h2>Let's build <em>your world.</em></h2>
+    <a class="btn" href="mailto:hello@lumen.studio">START A PROJECT</a>
+    <footer>
+      <span>LUMEN © 2026</span>
+      <span>HELLO@LUMEN.STUDIO</span>
+      <span>A STUDY AFTER LUSION.CO — ORIGINAL ART</span>
+    </footer>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* ============================================================
+   LUMEN — one continuous scroll-driven 3D camera flight.
+   Raw WebGL, zero dependencies. The camera flies forward
+   through procedural scenes as you scroll; the page background
+   grade follows waypoints: paper -> black -> electric blue.
+   ============================================================ */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', {antialias:true, alpha:false});
+if(!gl){ canvas.style.display='none'; }
+
+const VS = `
+attribute vec3 aPos; attribute vec3 aCol; attribute float aSize;
+uniform mat4 uProj; uniform mat4 uView; uniform float uPx; uniform float uTime;
+varying vec3 vCol; varying float vFog;
+void main(){
+  float ph = fract(sin(dot(aPos.xy, vec2(12.9898,78.233))) * 43758.5453) * 6.2831;
+  vec3 p = aPos;
+  /* slow unified rise (embers), wrapped to loop forever */
+  p.y = mod(p.y + 450.0 + uTime*30.0, 900.0) - 450.0;
+  /* individual wobble so it feels organic, not mechanical */
+  p.x += sin(uTime*0.9 + ph) * 45.0;
+  p.z += cos(uTime*0.7 + ph*1.7) * 60.0;
+  p.y += sin(uTime*0.8 + ph*2.3) * 20.0;
+  vec4 mv = uView * vec4(p,1.0);
+  float dist = -mv.z;
+  gl_Position = uProj * mv;
+  gl_PointSize = aSize * uPx * (320.0 / max(dist, 1.0));
+  vCol = aCol;
+  vFog = clamp(1.0 - dist/1500.0, 0.0, 1.0);
+}`;
+const FS = `
+precision mediump float;
+varying vec3 vCol; varying float vFog;
+void main(){
+  vec2 c = gl_PointCoord - 0.5;
+  float m = smoothstep(0.5, 0.12, length(c));
+  gl_FragColor = vec4(vCol, m * vFog * 0.9);
+}`;
+
+function shader(t,s){const h=gl.createShader(t);gl.shaderSource(h,s);gl.compileShader(h);
+  if(!gl.getShaderParameter(h,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(h));return h;}
+let prog=null, N=0;
+if(gl){
+  prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.disable(gl.DEPTH_TEST);
+
+  /* ---- build the worlds along -Z ---- */
+  const P=[],C=[],S=[];
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  function dot(x,y,z,r,g,b,s){P.push(x,y,z);C.push(r,g,b);S.push(s);}
+  // 1 · paper-sky drift (hero): soft light motes
+  for(let i=0;i<900;i++) dot(rnd(-420,420),rnd(-260,260),rnd(-60,-700), rnd(.55,.75),rnd(.55,.72),rnd(.6,.75), rnd(1.5,3.5));
+  // cobalt clusters in the hero field
+  for(let i=0;i<160;i++){const a=rnd(0,6.28),r=rnd(10,70);
+    dot(Math.cos(a)*r+rnd(-160,160),Math.sin(a)*r+rnd(-90,90),rnd(-120,-420), .15,.26,.94, rnd(2,4));}
+  // 2 · starfield
+  for(let i=0;i<2200;i++) dot(rnd(-460,460),rnd(-300,300),rnd(-500,-3600), rnd(.7,1),rnd(.75,1),rnd(.85,1), rnd(1,2.6));
+  // 3 · teal ring tunnel  z -750 → -1700
+  for(let r=0;r<12;r++){const z=-750-r*86, rad=190+Math.sin(r*.7)*26;
+    for(let i=0;i<130;i++){const a=i/130*Math.PI*2+jit();
+      dot(Math.cos(a)*rad,Math.sin(a)*rad*0.72,z+rnd(-8,8), .2,.9,.88, rnd(2,3.6));}}
+  function jit(){return rnd(-.02,.02);}
+  // 4 · magenta/cyan vortex  z -1750 → -2500
+  for(let i=0;i<1500;i++){const t=Math.random(),a=t*Math.PI*11,rad=60+t*170;
+    const z=-1750-t*750, mix=Math.random()<.5;
+    dot(Math.cos(a)*rad,Math.sin(a)*rad,z,
+      mix?.95:.2, mix?.25:.85, mix?.65:.9, rnd(1.8,3.2));}
+  // 5 · blue corridor + white blobs  z -2550 → -3450
+  for(let i=0;i<1300;i++) dot((Math.random()<.5?-1:1)*rnd(110,320),(Math.random()<.5?-1:1)*rnd(90,220),
+    rnd(-2550,-3450), .2,.38,1, rnd(2,4));
+  for(let i=0;i<220;i++) dot(rnd(-200,200),rnd(-130,130),rnd(-2600,-3400), 1,1,1, rnd(7,15));
+  // 6 · arrival dust
+  for(let i=0;i<700;i++) dot(rnd(-380,380),rnd(-240,240),rnd(-3450,-3950), .25,.9,.9, rnd(1.5,3));
+
+  N = S.length;
+  const buf=(data,sz,loc)=>{const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,sz,gl.FLOAT,false,0,0);};
+  buf(P,3,gl.getAttribLocation(prog,'aPos'));
+  buf(C,3,gl.getAttribLocation(prog,'aCol'));
+  buf(S,1,gl.getAttribLocation(prog,'aSize'));
+}
+const uProj=gl&&gl.getUniformLocation(prog,'uProj'),
+      uView=gl&&gl.getUniformLocation(prog,'uView'),
+      uPx=gl&&gl.getUniformLocation(prog,'uPx'),
+      uTime=gl&&gl.getUniformLocation(prog,'uTime');
+
+function resize(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr;
+  if(gl) gl.uniform1f(uPx, dpr);
+}
+addEventListener('resize', resize); resize();
+
+function persp(fov,asp,n,f){const t=1/Math.tan(fov/2),o=new Float32Array(16);
+  o[0]=t/asp;o[5]=t;o[10]=(f+n)/(n-f);o[11]=-1;o[14]=2*f*n/(n-f);return o;}
+
+/* background grade waypoints: [progress, r,g,b] */
+const GRADE=[[0,.949,.937,.910],[.16,.043,.043,.078],[.5,.016,.016,.047],[.78,.055,.118,.62],[1,.055,.118,.62]];
+function grade(p){
+  for(let i=0;i<GRADE.length-1;i++){const a=GRADE[i],b=GRADE[i+1];
+    if(p<=b[0]){const t=(p-a[0])/Math.max(b[0]-a[0],1e-4);
+      return [a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t, a[3]+(b[3]-a[3])*t];}}
+  return GRADE[GRADE.length-1].slice(1);
+}
+
+/* DOM beats fade by scroll windows */
+const beats=[...document.querySelectorAll('.beat')];
+const WINS=[[.06,.16],[.26,.36],[.46,.56],[.66,.76],[.85,.96]];
+
+let mx=0,my=0,tmx=0,tmy=0;
+addEventListener('pointermove',e=>{tmx=e.clientX/innerWidth-.5;tmy=e.clientY/innerHeight-.5;},{passive:true});
+
+const flight=document.getElementById('flight');
+let pSm=0;
+function frame(t){
+  const max=document.documentElement.scrollHeight-innerHeight;
+  const p=max>0?Math.min(Math.max(scrollY/max,0),1):0;
+  pSm += (p-pSm)*.08;
+  const pp = reduced ? p : pSm;
+
+  if(gl){
+    const g=grade(pp);
+    gl.viewport(0,0,canvas.width,canvas.height);
+    gl.clearColor(g[0],g[1],g[2],1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniformMatrix4fv(uProj,false,persp(70*Math.PI/180,canvas.width/canvas.height,.1,6000));
+    mx+=(tmx-mx)*.04; my+=(tmy-my)*.04;
+    const sway = reduced?0:1;
+    const cx=Math.sin(t*.00021)*26*sway + mx*70*sway;
+    const cy=Math.cos(t*.00017)*18*sway - my*46*sway;
+    const cz=-pp*3550;
+    // view = translate(-cx,-cy,-cz)
+    gl.uniformMatrix4fv(uView,false,new Float32Array([
+      1,0,0,0, 0,1,0,0, 0,0,1,0, -cx,-cy,-cz,1]));
+    gl.uniform1f(uTime, reduced?0:t*0.001);
+    gl.drawArrays(gl.POINTS,0,N);
+  }
+  // beats: only the word nearest viewport-center is opaque; quick crossfade
+  const vh = innerHeight, beatsD = beats.map(b=>{
+    const r=b.getBoundingClientRect();
+    return {b, d:Math.abs(r.top+r.height/2 - vh*.44)};
+  });
+  const best = Math.min(...beatsD.map(o=>o.d));
+  const gate = 1-Math.min(best/(vh*.55),1); // nobody near center -> all out
+  beatsD.forEach(({b,d})=>{
+    const e0 = (1-Math.min(Math.max((d-best)/(vh*.20),0),1)) * gate;
+    const e = e0*e0*(3-2*e0);
+    b.style.opacity=e.toFixed(3);
+    b.style.transform=`translateY(${(1-e)*60}px) scale(${.92+.08*e})`;
+  });
+  // hero content gently parallaxes away
+  const hero=document.querySelector('.hero');
+  if(hero) hero.style.transform=`translateY(${Math.min(p*innerHeight*.35,innerHeight*.35)}px)`;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* work cards reveal */
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.2});
+document.querySelectorAll('.card').forEach(c=>io.observe(c));
+
+/* loader ritual */
+(function(){
+  const l=document.getElementById('loader'),bar=document.getElementById('lbar'),pct=document.getElementById('lpct');
+  const t0=performance.now(),D=1300;
+  (function tick(){
+    const k=Math.min((performance.now()-t0)/D,1), e=1-Math.pow(1-k,3);
+    bar.style.transform=`scaleX(${e})`; pct.textContent=String(Math.round(e*100)).padStart(2,'0');
+    if(k<1) requestAnimationFrame(tick);
+    else setTimeout(()=>l.classList.add('done'),150);
+  })();
+/* nav smooth-scroll */
+document.querySelectorAll('[data-to]').forEach(function(a){
+  a.addEventListener('click',function(){
+    var el=document.querySelector(a.getAttribute('data-to'));
+    if(el) el.scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
+  });
+});
+})();
+</script>
+</body>
+</html>
